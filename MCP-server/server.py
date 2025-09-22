@@ -6,6 +6,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import os
 import json
+import pickle
+from google.auth.transport.requests import Request
+
+TOKEN_PATH = "token.pickle"  # Or "token.json"
 
 # Initialize FastMCP server
 mcp = FastMCP("Google-Classroom-MCP")
@@ -22,22 +26,37 @@ CLIENT_SECRET = config['web']['client_secret']
 AUTH_URI = config['web']['auth_uri']
 TOKEN_URI = config['web']['token_uri']
 REDIRECT_URI = config['web']['redirect_uri']
-print(CLIENT_ID, CLIENT_SECRET)
 
 def get_credentials():
-    flow = InstalledAppFlow.from_client_config(
-        {
-            "installed": {
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
-                "auth_uri": AUTH_URI,
-                "token_uri": TOKEN_URI,
-                "redirect_uri": REDIRECT_URI
-            }
-        },
-        SCOPES
-    )
-    creds = flow.run_local_server(port=3000)
+    creds = None
+    # Try to load existing credentials
+    if os.path.exists(TOKEN_PATH):
+        with open(TOKEN_PATH, "rb") as token:
+            creds = pickle.load(token)
+
+    # If there are no valid credentials, do auth flow
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_config(
+                {
+                    "installed": {
+                        "client_id": CLIENT_ID,
+                        "client_secret": CLIENT_SECRET,
+                        "auth_uri": AUTH_URI,
+                        "token_uri": TOKEN_URI,
+                        "redirect_uri": REDIRECT_URI
+                    }
+                },
+                SCOPES
+            )
+            creds = flow.run_local_server(port=3000)
+
+        # Save the credentials for next time
+        with open(TOKEN_PATH, "wb") as token:
+            pickle.dump(creds, token)
+
     return creds
 
 
